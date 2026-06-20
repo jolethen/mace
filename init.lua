@@ -8,14 +8,34 @@ local mace_data = {
 local COOLDOWN_TIME = 1.6
 local WIND_BURST_BOUNCE = 12
 
+-- Dynamic Texture & Sound Discovery (Stops the "nil value" crashes)
+local stone_texture = "default_steel_block.png"
+local mace_texture = "default_tool_steelsword.png^[colorize:#4a4a4a:120"
+local craft_ingot = "default:steel_ingot"
+local fallback_sounds = nil
+
+-- Check what game base is running and assign textures safely
+if minetest.get_modpath("mcl_core") then
+    stone_texture = "mcl_tools_heavy_core_side.png" -- Mineclonia / VoxeLibre
+    mace_texture = "mcl_tools_mace.png"
+    craft_ingot = "mcl_mobitems:breeze_rod"
+elseif minetest.get_modpath("default") then
+    stone_texture = "default_steel_block.png" -- Minetest Game
+    mace_texture = "default_tool_steelsword.png^[colorize:#4a4a4a:120"
+    craft_ingot = "default:steel_ingot"
+    if default and default.node_sound_stone_defaults then
+        fallback_sounds = default.node_sound_stone_defaults()
+    end
+end
+
 -- 1. Heavy Core Node Registration
 minetest.register_node("mace:heavy_core", {
     description = "Heavy Core",
     paramtype = "light",
-    tiles = {"default_steel_block.png"}, 
+    tiles = {stone_texture}, 
     is_ground_content = false,
     groups = {cracky = 1, level = 2},
-    sounds = default.node_sound_stone_defaults(),
+    sounds = fallback_sounds,
     drawtype = "nodebox",
     node_box = {
         type = "fixed",
@@ -28,7 +48,7 @@ minetest.register_node("mace:heavy_core", {
 -- 2. Mace Item Registration
 minetest.register_tool("mace:mace", {
     description = "Mace",
-    inventory_image = "default_tool_steelsword.png^[colorize:#4a4a4a:120", 
+    inventory_image = mace_texture, 
     wield_scale = {x = 1.2, y = 1.2, z = 1.2},
     tool_capabilities = {
         full_punch_interval = 1.6,
@@ -36,7 +56,7 @@ minetest.register_tool("mace:mace", {
         groupcaps = {
             snappy = {times = {1.5, 0.9, 0.4}, uses = 50, maxlevel = 3},
         },
-        damage_groups = {fleshy = 6}, -- Base damage on the ground
+        damage_groups = {fleshy = 6}, -- Base damage
     },
 
     on_use = function(itemstack, user, pointed_thing)
@@ -70,27 +90,17 @@ minetest.register_tool("mace:mace", {
                 -- 1 Block fallen = 0.5 additional damage
                 bonus_damage = fall_height * 0.5
                 
-                -- Mark player as SAFE from their impending landing impact
+                -- Mark player as SAFE from landing damage
                 mace_data.safe_from_fall[name] = true
                 
-                -- Negate downward velocity and bounce up (Wind Burst effect)
+                -- Negate downward velocity and bounce up
                 local current_vel = user:get_velocity()
                 user:set_velocity(vector.new(current_vel.x, 0, current_vel.z))
                 user:add_velocity(vector.new(0, WIND_BURST_BOUNCE, 0))
                 
-                -- Visual/Audio feedback on successful smash
+                -- Safe Audio/Visual Trigger
                 local target_pos = target:get_pos()
-                minetest.sound_play("default_cool_lava", { pos = target_pos, gain = 1.0, max_hear_distance = 20 })
-                
-                minetest.add_particlespawner({
-                    amount = 25,
-                    time = 0.1,
-                    minpos = vector.offset(target_pos, -0.6, 0, -0.6),
-                    maxpos = vector.offset(target_pos, 0.6, 1, 0.6),
-                    minvel = vector.new(-3, 1, -3),
-                    maxvel = vector.new(3, 5, 3),
-                    texture = "default_bubble.png",
-                })
+                minetest.sound_play("tnt_explode", { pos = target_pos, gain = 0.6, max_hear_distance = 20 }, true)
             end
             
             local total_damage = base_damage + bonus_damage
@@ -118,18 +128,14 @@ minetest.register_globalstep(function(dtime)
         local pos = player:get_pos()
 
         if velocity.y < -0.5 then
-            -- Store initial height position right as they start dropping
             if not mace_data.fall_starts[name] then
                 mace_data.fall_starts[name] = pos.y
             end
         else
-            -- If they are standing still or moving upwards, clear tracking data
-            -- Wrapped in a tiny delay so on_use has time to read fall_starts before it clears
             minetest.after(0.1, function()
                 local p = minetest.get_player_by_name(name)
                 if p and p:get_velocity().y >= 0 then
                     mace_data.fall_starts[name] = nil
-                    -- Reset safety flag once they land safely or stop bouncing
                     mace_data.safe_from_fall[name] = nil
                 end
             end)
@@ -141,16 +147,15 @@ end)
 minetest.register_on_player_hpchange(function(player, hp_change, reason)
     if reason.type == "fall" then
         local name = player:get_player_name()
-        -- If the player successfully smashed a target, completely negate landing damage
         if mace_data.safe_from_fall[name] then
-            mace_data.safe_from_fall[name] = nil -- Consume the shield flag
-            return 0 -- Absolute immunity
+            mace_data.safe_from_fall[name] = nil 
+            return 0 -- No damage taken!
         end
     end
     return hp_change
 end, true)
 
--- 5. Memory Cleanup
+-- 5. Data Cleanup
 minetest.register_on_leaveplayer(function(player)
     local name = player:get_player_name()
     mace_data.cooldowns[name] = nil
@@ -158,11 +163,11 @@ minetest.register_on_leaveplayer(function(player)
     mace_data.safe_from_fall[name] = nil
 end)
 
--- 6. Basic Crafting Recipe
+-- 6. Crafting Recipe
 minetest.register_craft({
     output = "mace:mace",
     recipe = {
         { "", "mace:heavy_core" },
-        { "", "default:steel_ingot" },
+        { "", craft_ingot },
     }
 })
