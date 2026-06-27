@@ -10,18 +10,16 @@ local WIND_BURST_BOUNCE = 12
 
 -- Dynamic Texture & Sound Discovery (Stops the "nil value" crashes)
 local stone_texture = "default_steel_block.png"
-local mace_texture = "default_tool_steelsword.png^[colorize:#4a4a4a:120"
+local mace_texture = "mace.png" -- Cleaned up to explicitly look for mace.png
 local craft_ingot = "default:steel_ingot"
 local fallback_sounds = nil
 
 -- Check what game base is running and assign textures safely
 if minetest.get_modpath("mcl_core") then
     stone_texture = "mcl_tools_heavy_core_side.png" -- Mineclonia / VoxeLibre
-    mace_texture = "mcl_tools_mace.png"
     craft_ingot = "mcl_mobitems:breeze_rod"
 elseif minetest.get_modpath("default") then
     stone_texture = "default_steel_block.png" -- Minetest Game
-    mace_texture = "default_tool_steelsword.png^[colorize:#4a4a4a:120"
     craft_ingot = "default:steel_ingot"
     if default and default.node_sound_stone_defaults then
         fallback_sounds = default.node_sound_stone_defaults()
